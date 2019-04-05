@@ -49,6 +49,9 @@ SourceArt/**/*.tga
 Binaries/*
 Plugins/*/Binaries/*
 
+# Binary Files
+enc_temp_folder/*
+
 # Builds
 Build/*
 
