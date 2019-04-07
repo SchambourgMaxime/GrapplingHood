@@ -8,6 +8,8 @@
 
 #include "GH_Character.generated.h"
 
+class AStaticMeshActor;
+
 UCLASS(config = Game)
 class GRAPPLINGHOOD_API AGH_Character : public ACharacter
 {
@@ -57,6 +59,8 @@ public:
 	/** Hook projectile reference */
 	AGH_Hook* Hook;
 
+	AStaticMeshActor* Rope;
+
 	///** Projectile class to spawn */
 	//UPROPERTY(EditDefaultsOnly, Category = Hook)
 	//TSubclassOf<class AGH_HookRope> RopeClass;
@@ -73,8 +77,13 @@ protected:
 
 	AGH_Hook* HookInstance = nullptr;
 
+	UStaticMesh* RopeMesh = nullptr;
+
 	/** Fires a projectile. */
 	void OnFire();
+
+	/** Fires a projectile. */
+	void UpdateRope();
 
 	/** Handles moving forward/backward */
 	void MoveForward(float Val);

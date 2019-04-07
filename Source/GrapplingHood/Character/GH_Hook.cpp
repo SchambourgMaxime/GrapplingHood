@@ -26,9 +26,9 @@ AGH_Hook::AGH_Hook()
 	RootComponent = SphereCollider;
 
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMeshFinder(TEXT("/Engine/BasicShapes/Sphere"));
+	ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMeshFinder(TEXT("/Engine/BasicShapes/Sphere"));
 	Mesh->SetStaticMesh(SphereMeshFinder.Object);
-	static ConstructorHelpers::FObjectFinder<UMaterial> SphereMaterialFinder(TEXT("/Engine/BasicShapes/BasicShapeMaterial"));
+	ConstructorHelpers::FObjectFinder<UMaterial> SphereMaterialFinder(TEXT("/Engine/BasicShapes/BasicShapeMaterial"));
 	UMaterialInterface* Material = UMaterialInstanceDynamic::Create(SphereMaterialFinder.Object, SphereMaterialFinder.Object);
 	Mesh->SetMaterial(0, Material);
 	Mesh->AttachToComponent(RootComponent, FAttachmentTransformRules::SnapToTargetNotIncludingScale);

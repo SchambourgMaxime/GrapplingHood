@@ -9,6 +9,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "Components/SkinnedMeshComponent.h"
 #include "Engine/SkeletalMeshSocket.h"
+#include "UObject/ConstructorHelpers.h"
+#include "Engine/StaticMeshActor.h"
+#include "Components/StaticMeshComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
@@ -54,6 +57,8 @@ AGH_Character::AGH_Character()
 	MuzzleLocation->SetupAttachment(GunMesh);
 	MuzzleLocation->SetRelativeLocation(FVector(0.2f, 48.4f, -10.6f));
 
+	RopeMesh = ConstructorHelpers::FObjectFinder<UStaticMesh>(TEXT("/Engine/BasicShapes/Cylinder")).Object;
+
 	// Default offset from the character location for projectiles to spawn
 	GunOffset = FVector(100.0f, 0.0f, 10.0f);
 }
@@ -67,7 +72,7 @@ void AGH_Character::BeginPlay()
 	//Attach gun mesh component to Skeleton, doing it here because the skeleton is not yet created in the constructor
 	GunMesh->AttachToComponent(BodyMesh, FAttachmentTransformRules(EAttachmentRule::SnapToTarget, true), TEXT("GripPoint"));
 
-	// try and fire a projectile
+	// Create hook tip
 	if (HookClass != NULL)
 	{
 		UWorld* const World = GetWorld();
@@ -87,6 +92,19 @@ void AGH_Character::BeginPlay()
 			HookInstance->StopAllMovement();
 			HookInstance->AttachToComponent(GunMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, "Muzzle");
 		}
+	}
+
+	// create rope mesh
+	UWorld* const World = GetWorld();
+	if (World != NULL)
+	{
+		FActorSpawnParameters params;
+		params.Name = TEXT("POUET");
+		// spawn the projectile at the muzzle
+		Rope = World->SpawnActor<AStaticMeshActor>();
+		Rope->SetMobility(EComponentMobility::Movable);
+		Rope->FindComponentByClass<UStaticMeshComponent>()->SetStaticMesh(RopeMesh);
+		Rope->SetActorLocation(FVector::ZeroVector);
 	}
 }
 
@@ -120,11 +138,17 @@ void AGH_Character::SetupPlayerInputComponent(class UInputComponent* PlayerInput
 
 void AGH_Character::Tick(float DeltaSeconds)
 {
+	if (HookInstance->GetState() == AGH_Hook::State::RETRACTING || HookInstance->GetState() == AGH_Hook::State::FIRING)
+		UpdateRope();
+
 	if (HookInstance->GetState() == AGH_Hook::State::RETRACTING)
 	{
 		HookInstance->Retract(GunMesh->GetSocketByName("Muzzle")->GetSocketLocation(GunMesh), DeltaSeconds);
 		if(HookInstance->GetState() == AGH_Hook::State::DOCKED)
+		{
 			HookInstance->AttachToComponent(GunMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, "Muzzle");
+			Destroy(Rope);
+		}
 	}
 }
 
@@ -155,6 +179,24 @@ void AGH_Character::OnFire()
 	else if (HookInstance->GetState() != AGH_Hook::State::RETRACTING)
 	{
 		HookInstance->Retract(GunMesh->GetSocketByName("Muzzle")->GetSocketLocation(GunMesh), 0.f);
+	}
+}
+
+void AGH_Character::UpdateRope()
+{
+	if (Rope != nullptr)
+	{
+		FVector CharLocation = GunMesh->GetSocketByName("Muzzle")->GetSocketLocation(GunMesh);
+		FVector HookLocation = HookInstance->GetActorLocation();
+		FVector CharToHookVector = HookLocation - CharLocation;
+
+		Rope->SetActorLocation(CharLocation + (CharToHookVector / 2));
+
+		//FMath::
+		//CharToHookVector.
+		Rope->SetActorRotation(CharToHookVector.ToOrientationRotator());
+
+		Rope->SetActorScale3D(FVector(0.04f, 0.04f, CharToHookVector.Size() / 100.f));
 	}
 }
 
