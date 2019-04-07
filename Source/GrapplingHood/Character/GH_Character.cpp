@@ -7,6 +7,8 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Components/SkinnedMeshComponent.h"
+#include "Engine/SkeletalMeshSocket.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
@@ -16,6 +18,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 // Sets default values
 AGH_Character::AGH_Character()
 {
+	SetActorTickEnabled(true);
+
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
 
@@ -81,6 +85,7 @@ void AGH_Character::BeginPlay()
 			HookInstance = World->SpawnActor<AGH_Hook>(HookClass, SpawnLocation, SpawnRotation, ActorSpawnParams);
 			check(HookInstance != nullptr && "Spawning of Hook class failed");
 			HookInstance->StopAllMovement();
+			HookInstance->AttachToComponent(GunMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, "Muzzle");
 		}
 	}
 }
@@ -113,26 +118,43 @@ void AGH_Character::SetupPlayerInputComponent(class UInputComponent* PlayerInput
 	PlayerInputComponent->BindAxis("LookUpRate", this, &AGH_Character::LookUpAtRate);
 }
 
+void AGH_Character::Tick(float DeltaSeconds)
+{
+	if (HookInstance->GetState() == AGH_Hook::State::RETRACTING)
+	{
+		HookInstance->Retract(GunMesh->GetSocketByName("Muzzle")->GetSocketLocation(GunMesh), DeltaSeconds);
+		if(HookInstance->GetState() == AGH_Hook::State::DOCKED)
+			HookInstance->AttachToComponent(GunMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, "Muzzle");
+	}
+}
+
 void AGH_Character::OnFire()
 {
-	// TODO : Impulse to Hook
-
-
-	// try and play the sound if specified
-	if (FireSound != NULL)
+	if (HookInstance->GetState() == AGH_Hook::State::DOCKED)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, FireSound, GetActorLocation());
-	}
+		HookInstance->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+		HookInstance->Fire(Camera->GetForwardVector());
 
-	// try and play a firing animation if specified
-	if (FireAnimation != NULL)
-	{
-		// Get the animation object for the arms mesh
-		UAnimInstance* AnimInstance = BodyMesh->GetAnimInstance();
-		if (AnimInstance != NULL)
+		// try and play the sound if specified
+		if (FireSound != NULL)
 		{
-			AnimInstance->Montage_Play(FireAnimation, 1.f);
+			UGameplayStatics::PlaySoundAtLocation(this, FireSound, GetActorLocation());
 		}
+
+		// try and play a firing animation if specified
+		if (FireAnimation != NULL)
+		{
+			// Get the animation object for the arms mesh
+			UAnimInstance* AnimInstance = BodyMesh->GetAnimInstance();
+			if (AnimInstance != NULL)
+			{
+				AnimInstance->Montage_Play(FireAnimation, 1.f);
+			}
+		}
+	}
+	else if (HookInstance->GetState() != AGH_Hook::State::RETRACTING)
+	{
+		HookInstance->Retract(GunMesh->GetSocketByName("Muzzle")->GetSocketLocation(GunMesh), 0.f);
 	}
 }
 

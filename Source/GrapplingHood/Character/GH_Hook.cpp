@@ -42,27 +42,65 @@ AGH_Hook::AGH_Hook()
 	ProjectileMovement->bRotationFollowsVelocity = true;
 	ProjectileMovement->bShouldBounce = true;
 
+	HookState = DOCKED;
+
 	InitialLifeSpan = 0.f;
 }
 
 
 AGH_Hook::~AGH_Hook()
 {
-	InitialLifeSpan = 0.f;
 }
 
 void AGH_Hook::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
 {
 	// Only add impulse and destroy projectile if we hit a physics
-	if ((OtherActor != NULL) && (OtherActor != this) && (OtherComp != NULL))
+	if (HookState == FIRING && (OtherActor != NULL) && (OtherActor != this) && (OtherComp != NULL))
 	{
-//		Destroy();
+		ProjectileMovement->Deactivate();
+		HookState = HOOKED;
 	}
 }
 
 void AGH_Hook::StopAllMovement()
 {
-	ProjectileMovement->StopMovementImmediately();
-	ProjectileMovement->ProjectileGravityScale = 0.f;
+	ProjectileMovement->Deactivate();
+}
+
+void AGH_Hook::Fire(FVector direction)
+{
+	if (HookState == DOCKED)
+	{
+		ProjectileMovement->Activate();
+		ProjectileMovement->SetVelocityInLocalSpace(GetTransform().InverseTransformVector((direction != FVector::ZeroVector ? direction : GetActorForwardVector()) * FireSpeed));
+		HookState = FIRING;
+	}
+}
+
+void AGH_Hook::Retract(FVector destination, float deltaTime)
+{
+	if (HookState == FIRING || HookState == HOOKED)
+	{
+		StopAllMovement();
+		HookState = RETRACTING;
+	}
+
+	if (HookState == RETRACTING)
+	{
+		FVector DeltaToDestination = destination - GetActorLocation();
+		float distanceThisFrame = RetractSpeed * deltaTime;
+
+		if ((distanceThisFrame * distanceThisFrame) > DeltaToDestination.SizeSquared())
+		{
+			SetActorLocation(destination);
+			HookState = DOCKED;
+			return;
+		}
+		else if(deltaTime != 0.f)
+		{
+			float ratioDistance = distanceThisFrame / DeltaToDestination.Size();
+			SetActorLocation(GetActorLocation() + DeltaToDestination * ratioDistance);
+		}
+	}
 }
 

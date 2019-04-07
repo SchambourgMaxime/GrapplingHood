@@ -4,14 +4,26 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+#include "GH_Hook.h"
 #include "GH_HookComponent.generated.h"
 
 
-UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
+UCLASS(hidecategories = Object, config = Engine, editinlinenew, abstract)
 class GRAPPLINGHOOD_API UGH_HookComponent : public USceneComponent
 {
 	GENERATED_BODY()
 
+	/** Sphere collision component */
+	UPROPERTY(VisibleAnywhere, Category="Collision")
+	class USphereComponent* SphereCollider;
+
+	/** Hook tip mesh component */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Projectile, meta = (AllowPrivateAccess = "true"))
+	class UStaticMeshComponent* Mesh;
+
+	/** Projectile movement component */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
+	class UProjectileMovementComponent* ProjectileMovement;
 public:	
 	// Sets default values for this component's properties
 	UGH_HookComponent();
@@ -21,7 +33,6 @@ protected:
 	virtual void BeginPlay() override;
 
 public:	
-	const AGH_Hook hook
 
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;

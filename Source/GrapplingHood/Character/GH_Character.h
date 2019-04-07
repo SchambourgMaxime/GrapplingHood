@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "GH_Hook.h"
-#include "GH_HookComponent.h"
 
 #include "GH_Character.generated.h"
 
@@ -23,7 +22,7 @@ class GRAPPLINGHOOD_API AGH_Character : public ACharacter
 	class USkeletalMeshComponent* GunMesh;
 
 	/** Location on gun mesh where projectiles should spawn. */
-	UPROPERTY(VisibleDefaultsOnly, Category = Gameplay)
+	UPROPERTY(VisibleDefaultsOnly, Category = Mesh)
 	class USceneComponent* MuzzleLocation;
 
 	/** First person camera */
@@ -53,7 +52,10 @@ public:
 
 	/** Projectile class to spawn */
 	UPROPERTY(EditDefaultsOnly, Category = Hook)
-	class UGH_HookComponent* Hook;
+	TSubclassOf<class AGH_Hook> HookClass;
+
+	/** Hook projectile reference */
+	AGH_Hook* Hook;
 
 	///** Projectile class to spawn */
 	//UPROPERTY(EditDefaultsOnly, Category = Hook)
@@ -94,6 +96,8 @@ protected:
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+	virtual void Tick(float DeltaSeconds) override;
 
 public:
 	/** Returns Mesh1P subobject **/
