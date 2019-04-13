@@ -8,10 +8,14 @@
 #include "Components/InputComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/SkinnedMeshComponent.h"
-#include "Engine/SkeletalMeshSocket.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "Engine/Public/Engine.h"
+#include "Containers/UnrealString.h"
+#include "Engine/Classes/PhysicsEngine/PhysicsConstraintComponent.h"
+#include <GenericPlatformMath.h>
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
@@ -98,13 +102,19 @@ void AGH_Character::BeginPlay()
 	UWorld* const World = GetWorld();
 	if (World != NULL)
 	{
-		FActorSpawnParameters params;
-		params.Name = TEXT("POUET");
 		// spawn the projectile at the muzzle
 		Rope = World->SpawnActor<AStaticMeshActor>();
 		Rope->SetMobility(EComponentMobility::Movable);
+		Rope->SetActorEnableCollision(false);
 		Rope->FindComponentByClass<UStaticMeshComponent>()->SetStaticMesh(RopeMesh);
+		Rope->FindComponentByClass<UStaticMeshComponent>()->SetVisibility(false);
 		Rope->SetActorLocation(FVector::ZeroVector);
+
+		PhysicsConstraints.SetNum(2);
+
+		// spawn the physics constraints
+		PhysicsConstraints[0] = World->SpawnActor<APhysicsConstraintActor>();
+		PhysicsConstraints[1] = World->SpawnActor<APhysicsConstraintActor>();
 	}
 }
 
@@ -138,8 +148,16 @@ void AGH_Character::SetupPlayerInputComponent(class UInputComponent* PlayerInput
 
 void AGH_Character::Tick(float DeltaSeconds)
 {
-	if (HookInstance->GetState() == AGH_Hook::State::RETRACTING || HookInstance->GetState() == AGH_Hook::State::FIRING)
+	if ((!RopeLocked && HookInstance->GetState() == AGH_Hook::State::HOOKED) || HookInstance->GetState() == AGH_Hook::State::RETRACTING || HookInstance->GetState() == AGH_Hook::State::FIRING)
 		UpdateRope();
+
+	if (!RopeLocked && HookInstance->GetState() == AGH_Hook::State::HOOKED && GetCharacterMovement()->Velocity.Z < -10.f)
+		LockRope();
+
+	if (RopeLocked)
+	{
+		SwingCharacter(DeltaSeconds);
+	}
 
 	if (HookInstance->GetState() == AGH_Hook::State::RETRACTING)
 	{
@@ -147,7 +165,8 @@ void AGH_Character::Tick(float DeltaSeconds)
 		if(HookInstance->GetState() == AGH_Hook::State::DOCKED)
 		{
 			HookInstance->AttachToComponent(GunMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, "Muzzle");
-			Destroy(Rope);
+			Rope->SetActorLocation(FVector::ZeroVector);
+			Rope->FindComponentByClass<UStaticMeshComponent>()->SetVisibility(false);
 		}
 	}
 }
@@ -175,10 +194,13 @@ void AGH_Character::OnFire()
 				AnimInstance->Montage_Play(FireAnimation, 1.f);
 			}
 		}
+
+		Rope->FindComponentByClass<UStaticMeshComponent>()->SetVisibility(true);
 	}
 	else if (HookInstance->GetState() != AGH_Hook::State::RETRACTING)
 	{
-		HookInstance->Retract(GunMesh->GetSocketByName("Muzzle")->GetSocketLocation(GunMesh), 0.f);
+		UnlockRope();
+		HookInstance->Retract(GetMuzzleWorldLocation(), 0.f);
 	}
 }
 
@@ -186,17 +208,94 @@ void AGH_Character::UpdateRope()
 {
 	if (Rope != nullptr)
 	{
-		FVector CharLocation = GunMesh->GetSocketByName("Muzzle")->GetSocketLocation(GunMesh);
+		FVector CharLocation = GetMuzzleWorldLocation();
 		FVector HookLocation = HookInstance->GetActorLocation();
 		FVector CharToHookVector = HookLocation - CharLocation;
 
 		Rope->SetActorLocation(CharLocation + (CharToHookVector / 2));
 
-		//FMath::
-		//CharToHookVector.
-		Rope->SetActorRotation(CharToHookVector.ToOrientationRotator());
+		Rope->SetActorRotation(FRotationMatrix::MakeFromZ(CharToHookVector).Rotator());
 
 		Rope->SetActorScale3D(FVector(0.04f, 0.04f, CharToHookVector.Size() / 100.f));
+	}
+}
+
+void AGH_Character::LockRope()
+{
+	UpdateRope();
+	//Rope->FindComponentByClass<UStaticMeshComponent>()->SetSimulatePhysics(true);
+
+	//APhysicsConstraintActor* PC_Char = PhysicsConstraints[0];
+	//APhysicsConstraintActor* PC_Hook = PhysicsConstraints[1];
+
+	//PC_Char->SetActorLocation(GetMuzzleWorldLocation());
+	//PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor1 = this;
+	//PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->ComponentName1.ComponentName = FName("GunMesh");
+	//PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor2 = Rope;
+	//PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->ComponentName1.ComponentName = FName("StaticMeshComponent");
+	//PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->SetDisableCollision(true);
+
+
+	//PC_Hook->SetActorLocation(HookInstance->GetActorLocation());
+	//PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor1 = HookInstance;
+	//PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->ComponentName1.ComponentName = FName("SphereCollider");
+	//PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor2 = Rope;
+	//PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->ComponentName1.ComponentName = FName("StaticMeshComponent");
+	//PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->SetDisableCollision(true);
+
+	FVector diffVec = HookInstance->GetActorLocation() - GetMuzzleWorldLocation();
+	SwingRopeLength = diffVec.Size();
+	SwingAngle = FMath::Acos(FVector::DotProduct(diffVec, FVector(0.f, 0.f, -1.f)) / SwingRopeLength);
+
+	RopeLocked = true;
+}
+
+#pragma optimize("", off)
+void AGH_Character::SwingCharacter(float DeltaSeconds)
+{
+	FVector location = FVector::ZeroVector;
+
+    const float angleAccel = (-9.81f / SwingRopeLength) * FMath::Sin(SwingAngle);
+    SwingAngleVelocity += angleAccel * DeltaSeconds;
+    SwingAngle += SwingAngleVelocity * DeltaSeconds;
+
+	FVector location2D = FVector::ZeroVector;
+	location2D.X += sin(SwingAngle) * SwingRopeLength;
+	location2D.Z += cos(SwingAngle) * SwingRopeLength;
+
+	DrawDebugLine(
+		GetWorld(),
+		HookInstance->GetActorLocation(),
+		HookInstance->GetActorLocation() + location2D,
+		FColor(255, 0, 0),
+		false, -1, 0,
+		12.333
+	);
+
+	FRotationMatrix::MakeFromY(FVector::CrossProduct(HookInstance->GetActorLocation() - GetMuzzleWorldLocation(), FVector(0.f, 1.f, 0.f)) ).Rotator().RotateVector(location2D);
+
+	location += HookInstance->GetActorLocation();
+
+	//SetActorLocation(location - GetMuzzleWorldLocation());
+
+	UpdateRope();
+}
+#pragma optimize("", on)
+
+void AGH_Character::UnlockRope()
+{
+	for (APhysicsConstraintActor* physicsConstraint : PhysicsConstraints)
+	{
+		APhysicsConstraintActor* PC_Char = PhysicsConstraints[0];
+		APhysicsConstraintActor* PC_Hook = PhysicsConstraints[1];
+
+		PC_Char->SetActorLocation(GetMuzzleWorldLocation());
+		PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor1 = nullptr;
+
+		PC_Hook->SetActorLocation(HookInstance->GetActorLocation());
+		PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor2 = nullptr;
+
+		RopeLocked = false;
 	}
 }
 

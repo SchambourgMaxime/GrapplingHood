@@ -5,10 +5,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "GH_Hook.h"
+#include "Engine/SkeletalMeshSocket.h"
 
 #include "GH_Character.generated.h"
 
 class AStaticMeshActor;
+class APhysicsConstraintActor;
 
 UCLASS(config = Game)
 class GRAPPLINGHOOD_API AGH_Character : public ACharacter
@@ -78,12 +80,27 @@ protected:
 	AGH_Hook* HookInstance = nullptr;
 
 	UStaticMesh* RopeMesh = nullptr;
+	TArray<APhysicsConstraintActor*> PhysicsConstraints;
+
+	bool RopeLocked = false;
+
+	float SwingRopeLength;
+	float SwingAngle;
+	float SwingAngleVelocity;
 
 	/** Fires a projectile. */
 	void OnFire();
 
 	/** Fires a projectile. */
 	void UpdateRope();
+
+	/** Fires a projectile. */
+	void LockRope();
+
+	void SwingCharacter(float DeltaSeconds);
+
+	/** Fires a projectile. */
+	void UnlockRope();
 
 	/** Handles moving forward/backward */
 	void MoveForward(float Val);
@@ -113,5 +130,6 @@ public:
 	FORCEINLINE class USkeletalMeshComponent* GetBodyMesh() const { return BodyMesh; }
 	/** Returns FirstPersonCameraComponent subobject **/
 	FORCEINLINE class UCameraComponent* GetCamera() const { return Camera; }
-
+	/** Returns WorldLocation at the tip of the gun subobject */
+	FORCEINLINE FVector GetMuzzleWorldLocation() const { return GunMesh->GetSocketByName("Muzzle")->GetSocketLocation(GunMesh); }
 };
