@@ -87,6 +87,7 @@ protected:
 	float SwingRopeLength;
 	float SwingAngle;
 	float SwingAngleVelocity;
+	FVector SwingLastDelta;
 
 	/** Fires a projectile. */
 	void OnFire();
@@ -132,4 +133,6 @@ public:
 	FORCEINLINE class UCameraComponent* GetCamera() const { return Camera; }
 	/** Returns WorldLocation at the tip of the gun subobject */
 	FORCEINLINE FVector GetMuzzleWorldLocation() const { return GunMesh->GetSocketByName("Muzzle")->GetSocketLocation(GunMesh); }
+	/** Returns WorldLocation at the tip of the gun subobject */
+	FORCEINLINE FVector GetMuzzleLocalLocation() const { return GunMesh->GetSocketByName("Muzzle")->RelativeLocation; }
 };

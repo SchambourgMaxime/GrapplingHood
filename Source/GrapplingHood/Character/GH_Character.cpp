@@ -169,6 +169,8 @@ void AGH_Character::Tick(float DeltaSeconds)
 			Rope->FindComponentByClass<UStaticMeshComponent>()->SetVisibility(false);
 		}
 	}
+
+	//DrawDebugLine(GetWorld(), GetActorLocation(), GetActorLocation() + GetCharacterMovement()->Velocity, FColor::Red, false, -1.f, 0, 1.f);
 }
 
 void AGH_Character::OnFire()
@@ -256,27 +258,24 @@ void AGH_Character::SwingCharacter(float DeltaSeconds)
 	FVector location = FVector::ZeroVector;
 
     const float angleAccel = (-9.81f / SwingRopeLength) * FMath::Sin(SwingAngle);
-    SwingAngleVelocity += angleAccel * DeltaSeconds;
-    SwingAngle += SwingAngleVelocity * DeltaSeconds;
+    SwingAngleVelocity += angleAccel * 80.f * DeltaSeconds;
+    SwingAngle -= SwingAngleVelocity * DeltaSeconds;
 
 	FVector location2D = FVector::ZeroVector;
 	location2D.X += sin(SwingAngle) * SwingRopeLength;
 	location2D.Z += cos(SwingAngle) * SwingRopeLength;
 
-	DrawDebugLine(
-		GetWorld(),
-		HookInstance->GetActorLocation(),
-		HookInstance->GetActorLocation() + location2D,
-		FColor(255, 0, 0),
-		false, -1, 0,
-		12.333
-	);
+	FVector rightVector = FVector::CrossProduct(GetMuzzleWorldLocation() - HookInstance->GetActorLocation(), FVector(0.f, 0.f, -1.f));
+	rightVector.Normalize();
+	location = -FRotationMatrix::MakeFromX(rightVector).Rotator().RotateVector(location2D);
 
-	FRotationMatrix::MakeFromY(FVector::CrossProduct(HookInstance->GetActorLocation() - GetMuzzleWorldLocation(), FVector(0.f, 1.f, 0.f)) ).Rotator().RotateVector(location2D);
+	location2D += HookInstance->GetActorLocation();
+	FVector newLocation = location2D - GetMuzzleLocalLocation();
+	SwingLastDelta = newLocation - GetMuzzleWorldLocation();
 
-	location += HookInstance->GetActorLocation();
+	SetActorLocation(newLocation);
 
-	//SetActorLocation(location - GetMuzzleWorldLocation());
+	DrawDebugLine(GetWorld(), GetMuzzleWorldLocation(), GetMuzzleWorldLocation() + (SwingLastDelta * SwingAngleVelocity * 10.f), FColor::Red, false, -1.f, 0, 1.f);
 
 	UpdateRope();
 }
@@ -284,19 +283,9 @@ void AGH_Character::SwingCharacter(float DeltaSeconds)
 
 void AGH_Character::UnlockRope()
 {
-	for (APhysicsConstraintActor* physicsConstraint : PhysicsConstraints)
-	{
-		APhysicsConstraintActor* PC_Char = PhysicsConstraints[0];
-		APhysicsConstraintActor* PC_Hook = PhysicsConstraints[1];
+	RopeLocked = false;
 
-		PC_Char->SetActorLocation(GetMuzzleWorldLocation());
-		PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor1 = nullptr;
-
-		PC_Hook->SetActorLocation(HookInstance->GetActorLocation());
-		PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor2 = nullptr;
-
-		RopeLocked = false;
-	}
+	GetCharacterMovement()->Velocity = SwingLastDelta * 1000.f;
 }
 
 void AGH_Character::MoveForward(float Value)
