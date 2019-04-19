@@ -225,30 +225,14 @@ void AGH_Character::UpdateRope()
 void AGH_Character::LockRope()
 {
 	UpdateRope();
-	//Rope->FindComponentByClass<UStaticMeshComponent>()->SetSimulatePhysics(true);
-
-	//APhysicsConstraintActor* PC_Char = PhysicsConstraints[0];
-	//APhysicsConstraintActor* PC_Hook = PhysicsConstraints[1];
-
-	//PC_Char->SetActorLocation(GetMuzzleWorldLocation());
-	//PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor1 = this;
-	//PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->ComponentName1.ComponentName = FName("GunMesh");
-	//PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor2 = Rope;
-	//PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->ComponentName1.ComponentName = FName("StaticMeshComponent");
-	//PC_Char->FindComponentByClass<UPhysicsConstraintComponent>()->SetDisableCollision(true);
-
-
-	//PC_Hook->SetActorLocation(HookInstance->GetActorLocation());
-	//PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor1 = HookInstance;
-	//PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->ComponentName1.ComponentName = FName("SphereCollider");
-	//PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->ConstraintActor2 = Rope;
-	//PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->ComponentName1.ComponentName = FName("StaticMeshComponent");
-	//PC_Hook->FindComponentByClass<UPhysicsConstraintComponent>()->SetDisableCollision(true);
 
 	FVector diffVec = HookInstance->GetActorLocation() - GetMuzzleWorldLocation();
 	SwingRopeLength = diffVec.Size();
 	SwingAngle = FMath::Acos(FVector::DotProduct(diffVec, FVector(0.f, 0.f, -1.f)) / SwingRopeLength);
-
+	SwingPlaneNormal = FVector::CrossProduct(FVector(0.f, 0.f, -1.f), diffVec);
+	SwingPlaneNormal.Normalize();
+	SwingZRotation = FMath::Acos(FVector::DotProduct(SwingPlaneNormal, FVector(0.f, 1.f, 0.f)));
+	float pouet = FMath::RadiansToDegrees(SwingZRotation);
 	RopeLocked = true;
 }
 
@@ -261,21 +245,18 @@ void AGH_Character::SwingCharacter(float DeltaSeconds)
     SwingAngleVelocity += angleAccel * 80.f * DeltaSeconds;
     SwingAngle -= SwingAngleVelocity * DeltaSeconds;
 
-	FVector location2D = FVector::ZeroVector;
-	location2D.X += sin(SwingAngle) * SwingRopeLength;
-	location2D.Z += cos(SwingAngle) * SwingRopeLength;
+	location.X += sin(SwingAngle) * SwingRopeLength;
+	location.Z += cos(SwingAngle) * SwingRopeLength;
 
-	FVector rightVector = FVector::CrossProduct(GetMuzzleWorldLocation() - HookInstance->GetActorLocation(), FVector(0.f, 0.f, -1.f));
-	rightVector.Normalize();
-	location = -FRotationMatrix::MakeFromX(rightVector).Rotator().RotateVector(location2D);
+	float zDistance = location.X;
+	location.X += sin(SwingZRotation) * zDistance;
+	location.Y -= cos(SwingZRotation) * zDistance;
 
-	location2D += HookInstance->GetActorLocation();
-	FVector newLocation = location2D - GetMuzzleLocalLocation();
+	location += HookInstance->GetActorLocation();
+	FVector newLocation = location - GetMuzzleLocalLocation();
 	SwingLastDelta = newLocation - GetMuzzleWorldLocation();
 
 	SetActorLocation(newLocation);
-
-	DrawDebugLine(GetWorld(), GetMuzzleWorldLocation(), GetMuzzleWorldLocation() + (SwingLastDelta * SwingAngleVelocity * 10.f), FColor::Red, false, -1.f, 0, 1.f);
 
 	UpdateRope();
 }
@@ -285,7 +266,7 @@ void AGH_Character::UnlockRope()
 {
 	RopeLocked = false;
 
-	GetCharacterMovement()->Velocity = SwingLastDelta * 1000.f;
+	GetCharacterMovement()->Velocity = GetTransform().Inverse().TransformVector(SwingLastDelta) * 10.f;
 }
 
 void AGH_Character::MoveForward(float Value)

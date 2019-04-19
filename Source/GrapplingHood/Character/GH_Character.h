@@ -87,6 +87,8 @@ protected:
 	float SwingRopeLength;
 	float SwingAngle;
 	float SwingAngleVelocity;
+	FVector SwingPlaneNormal;
+	float SwingZRotation;
 	FVector SwingLastDelta;
 
 	/** Fires a projectile. */
